@@ -4,7 +4,18 @@
 WiFiClient espLampje;
 PubSubClient client(espLampje);
 
-const int led = D6;
+//Pin definitions
+//Debug LEDs
+const int redLed = 5;
+const int greenLed = 1;
+
+//RGBWW control FETs
+const int redFET = 15;
+const int greenFET = 13;
+const int blueFET = 12;
+const int w1FET = 14;
+const int w2FET = 4;
+
 const char* chipid = "espLampje";
 
 const char* mqtt_server = "192.168.1.31";
@@ -67,7 +78,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   // Lets select a topic/payload handler
   // Some topics (buttons for example) don't need a specific payload handled, just a reaction to the topic. Saves a lot of time!
 
-  if (strcmp(topic, "whiskeygrid/lampje") == 0) {
+  if (strcmp(topic, "whiskeygrid/rgb/1") == 0 || strcmp(topic, "whiskeygrid/rgb") == 0) {
     if (strcmp(bericht, "aan") == 0) {
       digitalWrite(led, HIGH);
       //Serial.println("lampje aan :)");
