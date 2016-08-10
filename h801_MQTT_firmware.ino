@@ -33,6 +33,11 @@ void setup() {
   pinMode(blueFET, OUTPUT);
   pinMode(w1FET, OUTPUT);
   pinMode(w2FET, OUTPUT);
+  digitalWrite(redFET, LOW);
+  digitalWrite(greenFET, LOW);
+  digitalWrite(blueFET, LOW);
+  digitalWrite(w1FET, LOW);
+  digitalWrite(w2FET, LOW);
   pinMode(redLed, OUTPUT);
   pinMode(greenLed, OUTPUT);
   WiFi.begin(ssid, wpa2key);
