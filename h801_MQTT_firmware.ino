@@ -67,9 +67,9 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   //Serial.print("Hee ik hoor wat in [");
   //Serial.print(topic);
   //Serial.print("] ");
-  for (int i = 0; i < length; i++) {
-    //Serial.print((char)payload[i]);
-  }
+  //for (int i = 0; i < length; i++) {
+  //  Serial.print((char)payload[i]);
+  //}
   //Serial.println();
  
   for (uint8_t pos = 0; pos < length; pos++) {
