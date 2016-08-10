@@ -16,7 +16,8 @@ const int blueFET = 12;
 const int w1FET = 14;
 const int w2FET = 4;
 
-const char* chipid = "espLampje";
+//Some info needed for proper operation
+const char* chipid = "h801";
 
 const char* mqtt_server = "192.168.1.31";
 const char* ssid    = "whiskeygrid";
