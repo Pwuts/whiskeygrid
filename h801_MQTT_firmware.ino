@@ -1,8 +1,8 @@
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
 
-WiFiClient espLampje;
-PubSubClient client(espLampje);
+WiFiClient h801;
+PubSubClient client(h801);
 
 //Pin definitions
 //Debug LEDs
