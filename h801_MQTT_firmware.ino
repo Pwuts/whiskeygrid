@@ -47,8 +47,8 @@ void setup() {
 
 void loop() {
   if (!client.connected()) {
-    digitalWrite(redLed, HIGH);
-    digitalWrite(greenLed, LOW);
+    digitalWrite(redLed, LOW);    //turn ON red LED
+    digitalWrite(greenLed, HIGH); //turn OFF Green LED
     reconnect();
   }
   client.loop();
@@ -63,8 +63,8 @@ void reconnect() {
     //Serial.println(reconnectAttempts);
     if(client.connect(chipid)) { //try to reconnect, check if succeeds
       //Serial.println("connected"); //debug info --> serial
-      digitalWrite(redLed, LOW);
-      digitalWrite(greenLed, HIGH);
+      digitalWrite(redLed, HIGH);
+      digitalWrite(greenLed, LOW);
       client.publish("whiskeygrid/debug", chipid); //debug info --> MQTT
       client.subscribe("whiskeygrid/#"); //resubscribe to listen for incoming messages again
     } else {
@@ -80,7 +80,7 @@ void reconnect() {
 
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
   char bericht[50] = "";
-  digitalWrite(greenLed, LOW);
+  digitalWrite(greenLed, HIGH);
  
   //Serial.print("Hee ik hoor wat in [");
   //Serial.print(topic);
@@ -110,6 +110,6 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
       //Serial.println("lampje uit :(");
     }
   }
-  digitalWrite(greenLed, HIGH);
+  digitalWrite(greenLed, LOW);
 }
 
