@@ -18,7 +18,6 @@ const int w2FET = 4;
 
 //Some info needed for proper operation
 const char* chipid = "h801";
-
 const char* mqtt_server = "192.168.1.31";
 const char* ssid    = "whiskeygrid";
 const char* wpa2key = "7A6U6QM0RQ0Z";
@@ -80,7 +79,7 @@ void reconnect() {
 
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
   char bericht[50] = "";
-  digitalWrite(greenLed, HIGH);
+  digitalWrite(greenLed, LOW);
  
   //Serial.print("Hee ik hoor wat in [");
   //Serial.print(topic);
@@ -110,6 +109,6 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
       //Serial.println("lampje uit :(");
     }
   }
-  digitalWrite(greenLed, LOW);
+  digitalWrite(greenLed, HIGH);
 }
 
