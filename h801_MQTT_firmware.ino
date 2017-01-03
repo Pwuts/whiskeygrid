@@ -18,9 +18,9 @@ const int w2FET = 4;
 
 //Some info needed for proper operation
 const char* chipid = "h801";
-const char* mqtt_server = "192.168.1.31";
-const char* ssid    = "whiskeygrid";
-const char* wpa2key = "7A6U6QM0RQ0Z";
+const char* mqtt_server = "192.168.1.123";
+const char* ssid    = "fsdfasdfd";
+const char* wpa2key = "asdfasdfsda";
 
 int rgb[3] = {0,0,0}; //Variable in which RGB values are stored, handy for when powered off
 
