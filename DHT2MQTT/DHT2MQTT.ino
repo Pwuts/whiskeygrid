@@ -8,17 +8,21 @@
 
 #define Sprintf(f, ...) ({ char* s; asprintf(&s, f, __VA_ARGS__); String r = s; free(s); r; })
 
-#define DHTPIN D4
-#define DHTTYPE DHT22
+/* Device specific configuration */
 
-DHT sensor(DHTPIN, DHTTYPE);
+#define PORTAL_TRIGGER_PIN D8
 
-char* d_mqtt_host = "127.0.0.1";
-int   d_mqtt_port = 1883;
-char* d_mqtt_root = "my_mqtt_root";
-char* d_connect_topic = "/debug/node_connect";
-char* d_debug_topic = "/debug";
-char* d_influx_topic = "/influx";
+#define DHT_PIN D4
+#define DHT_TYPE DHT22
+
+/* Default configuration */
+
+const char* d_mqtt_host = "127.0.0.1";
+const int   d_mqtt_port = 1883;
+const char* d_mqtt_root = "my_mqtt_root";
+const char* d_connect_topic = "/debug/node_connect";
+const char* d_debug_topic = "/debug";
+const char* d_influx_topic = "/influx";
 
 /* Configuration variables (are set by the WiFiSettings portal) */
 
@@ -38,8 +42,9 @@ String influx_topic, influx_temperature_measurement, influx_humidity_measurement
 
 /* Global variables/instances */
 
-unsigned long last_measurement = 0;
 float temp_c, humidity;
+
+DHT sensor(DHT_PIN, DHT_TYPE);
 
 WiFiClient espClient;
 PubSubClient mqttClient(espClient);
@@ -52,7 +57,7 @@ void setup() {
     pinMode(LED_BUILTIN, OUTPUT);
     digitalWrite(LED_BUILTIN, HIGH);
 
-    pinMode(D8, INPUT);
+    pinMode(PORTAL_TRIGGER_PIN, INPUT);
 
     LittleFS.begin();
     setup_wifi();
@@ -64,9 +69,8 @@ void setup() {
     sensor.begin();     // initialize DHT22
 }
 
-bool first_measurement = true;
-
 void loop() {
+    static bool first_measurement = true;
     ArduinoOTA.handle();
 
     if (!mqttClient.connected()) {
@@ -85,23 +89,16 @@ void loop() {
          * Sensor readings may also be up to 2 seconds 'old' (it's a very slow sensor) */
         get_measurement();
 
-        // Temperature -> MQTT topic
         mqtt_publish(temperature_topic, Sprintf("%.1f °C", temp_c).c_str(), true);
-
-        // Temperature -> Influx
-        influx_publish(influx_temperature_measurement, Sprintf("temperature=%.1f", temp_c), "sensor=\"DHT22\"");
-
-        // RH -> MQTT topic
         mqtt_publish(RH_topic, Sprintf("%.1f %%RH", humidity).c_str(), true);
-
-        // RH -> Influx
+        influx_publish(influx_temperature_measurement, Sprintf("temperature=%.1f", temp_c), "sensor=\"DHT22\"");
         influx_publish(influx_humidity_measurement, Sprintf("RH=%.1f", humidity), "sensor=\"DHT22\"");
 
         Serial.println();
         digitalWrite(LED_BUILTIN, HIGH);
     }
 
-    if (first_measurement)  first_measurement = false;
+    first_measurement = false;
 }
 
 

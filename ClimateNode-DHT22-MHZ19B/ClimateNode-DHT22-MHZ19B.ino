@@ -10,22 +10,26 @@
 
 #define Sprintf(f, ...) ({ char* s; asprintf(&s, f, __VA_ARGS__); String r = s; free(s); r; })
 
-#define DHTPIN D4
-#define DHTTYPE DHT22
+/* Device specific configuration */
 
-DHT dht22(DHTPIN, DHTTYPE);
+#define PORTAL_TRIGGER_PIN D8
 
-#define MHZ19_TX D1
-#define MHZ19_RX D2
-SoftwareSerial mhzSerial(MHZ19_RX, MHZ19_TX);
+#define DHT_PIN D4
+#define DHT_TYPE DHT22
+
+#define MHZ19_TX_PIN D1
+#define MHZ19_RX_PIN D2
+SoftwareSerial mhzSerial(MHZ19_RX_PIN, MHZ19_TX_PIN);
 MHZ19 mhz19;
 
-char* d_mqtt_host = "127.0.0.1";
-int   d_mqtt_port = 1883;
-char* d_mqtt_root = "my_mqtt_root";
-char* d_connect_topic = "/debug/node_connect";
-char* d_debug_topic = "/debug";
-char* d_influx_topic = "/influx";
+/* Default configuration */
+
+const char* d_mqtt_host = "127.0.0.1";
+const int   d_mqtt_port = 1883;
+const char* d_mqtt_root = "my_mqtt_root";
+const char* d_connect_topic = "/debug/node_connect";
+const char* d_debug_topic = "/debug";
+const char* d_influx_topic = "/influx";
 
 /* Configuration variables (are set by the WiFiSettings portal) */
 
@@ -47,10 +51,11 @@ String influx_topic, influx_temperature_measurement, influx_humidity_measurement
 
 /* Global variables/instances */
 
-unsigned long last_measurement = 0;
-float temp_c, humidity;
+float dht_temp, humidity;
 int co2_ppm;
 float mhz19_temp;
+
+DHT dht22(DHT_PIN, DHT_TYPE);
 
 WiFiClient espClient;
 PubSubClient mqttClient(espClient);
@@ -63,7 +68,7 @@ void setup() {
     pinMode(LED_BUILTIN, OUTPUT);
     digitalWrite(LED_BUILTIN, HIGH);
 
-    pinMode(D8, INPUT);
+    pinMode(PORTAL_TRIGGER_PIN, INPUT);
 
     LittleFS.begin();
     setup_wifi();
@@ -81,9 +86,9 @@ void setup() {
     mhz19.autoCalibration();
 }
 
-bool first_measurement = true;
-
 void loop() {
+    static bool first_measurement = true;
+
     ArduinoOTA.handle();
 
     if (!mqttClient.connected()) {
@@ -102,16 +107,9 @@ void loop() {
          * Sensor readings may also be up to 2 seconds 'old' (it's a very slow sensor) */
         dht22_get_measurement();
 
-        // Temperature -> MQTT topic
-        mqtt_publish(temperature_topic, Sprintf("%.1f °C", temp_c).c_str(), true);
-
-        // Temperature -> Influx
-        influx_publish(influx_temperature_measurement, Sprintf("temperature=%.1f", temp_c), "sensor=\"DHT22\"");
-
-        // RH -> MQTT topic
+        mqtt_publish(temperature_topic, Sprintf("%.1f °C", dht_temp).c_str(), true);
         mqtt_publish(RH_topic, Sprintf("%.1f %%RH", humidity).c_str(), true);
-
-        // RH -> Influx
+        influx_publish(influx_temperature_measurement, Sprintf("temperature=%.1f", dht_temp), "sensor=\"DHT22\"");
         influx_publish(influx_humidity_measurement, Sprintf("RH=%.1f", humidity), "sensor=\"DHT22\"");
 
         Serial.println();
@@ -124,37 +122,30 @@ void loop() {
         /* Get latest temperature and CO2 readings from MH-Z19 sensor */
         mhz19_get_measurement();
 
-        // CO2 -> MQTT topic
         mqtt_publish(co2_topic, Sprintf("%d ppm", co2_ppm).c_str(), true);
-
-        // CO2 -> Influx
-        influx_publish(influx_co2_measurement, Sprintf("co2=%d", co2_ppm), "sensor=\"MH-Z19\"");
-
-        // // Temperature -> MQTT topic
         // mqtt_publish(temperature_topic, Sprintf("%.1f °C"), true);
-
-        // Temperature -> Influx
+        influx_publish(influx_co2_measurement, Sprintf("co2=%d", co2_ppm), "sensor=\"MH-Z19\"");
         influx_publish(influx_temperature_measurement, Sprintf("temperature=%.1f", mhz19_temp), "sensor=\"MH-Z19\"");
 
         Serial.println();
         digitalWrite(LED_BUILTIN, HIGH);
     }
 
-    if (first_measurement)  first_measurement = false;
+    first_measurement = false;
 }
 
 
 void dht22_get_measurement() {
     // Reading temperature for humidity takes about 250 milliseconds!
     // Sensor readings may also be up to 2 seconds 'old' (it's a very slow sensor)
-    temp_c = dht22.readTemperature() + temp_offset;  // Read temperature as Celcius
+    dht_temp = dht22.readTemperature() + temp_offset;  // Read temperature as Celcius
     humidity = dht22.readHumidity();  // Read humidity (percent)
 
-    Serial.printf("DHT22: %.1f°C\r\n", temp_c);
+    Serial.printf("DHT22: %.1f°C\r\n", dht_temp);
     Serial.printf("DHT22: %.1f%%RH\r\n", humidity);
 
     // Check if any reads failed and exit early (to try again).
-    if (isnan(humidity) || isnan(temp_c)) {
+    if (isnan(humidity) || isnan(dht_temp)) {
         Serial.println("Failed to read from DHT sensor!");
         return;
     }
@@ -198,7 +189,7 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length) {
     // if(message == node_name + ", temperature, c"){
     //     dht22_get_measurement();
 
-    //     mqtt_publish(temperature_topic, Sprintf("%.1f °C", temp_c).c_str(), true);
+    //     mqtt_publish(temperature_topic, Sprintf("%.1f °C", dht_temp).c_str(), true);
     // } else if (message == node_name + ", humidity"){
     //     dht22_get_measurement();
 
