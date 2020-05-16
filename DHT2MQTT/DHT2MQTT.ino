@@ -48,7 +48,6 @@ DHT sensor(DHT_PIN, DHT_TYPE);
 
 WiFiClient espClient;
 PubSubClient mqttClient(espClient);
-char mqtt_message[80];
 
 
 void setup()
