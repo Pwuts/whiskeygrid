@@ -62,7 +62,8 @@ PubSubClient mqttClient(espClient);
 char mqtt_message[80];
 
 
-void setup() {
+void setup()
+{
     Serial.begin(115200);
 
     pinMode(LED_BUILTIN, OUTPUT);
@@ -86,8 +87,10 @@ void setup() {
     mhz19.autoCalibration();
 }
 
-void loop() {
+void loop()
+{
     static bool first_measurement = true;
+    static unsigned long last_dht22_measurement_time = 0, last_mhz19_measurement_time = 0;
 
     ArduinoOTA.handle();
 
@@ -100,7 +103,9 @@ void loop() {
         WiFiSettings.portal();
     }
 
-    if (!(millis() % dht22_interval) || first_measurement == true) {
+    if ((millis() > last_dht22_measurement_time + dht22_interval) || first_measurement) {
+        last_dht22_measurement_time = millis();
+
         digitalWrite(LED_BUILTIN, LOW);
 
         /* Reading temperature for humidity takes about 250 milliseconds!
@@ -116,7 +121,9 @@ void loop() {
         digitalWrite(LED_BUILTIN, HIGH);
     }
 
-    if (!(millis() % mhz19_interval) || first_measurement == true) {
+    if ((millis() > last_mhz19_measurement_time + mhz19_interval) || first_measurement) {
+        last_mhz19_measurement_time = millis();
+
         digitalWrite(LED_BUILTIN, LOW);
 
         /* Get latest temperature and CO2 readings from MH-Z19 sensor */
@@ -135,7 +142,8 @@ void loop() {
 }
 
 
-void dht22_get_measurement() {
+void dht22_get_measurement()
+{
     // Reading temperature for humidity takes about 250 milliseconds!
     // Sensor readings may also be up to 2 seconds 'old' (it's a very slow sensor)
     dht_temp = dht22.readTemperature() + temp_offset;  // Read temperature as Celcius
@@ -180,7 +188,8 @@ void influx_publish(const String measurement, const String fields, const String 
     mqtt_publish(influx_topic, influx_line.c_str(), false);
 }
 
-void mqtt_callback(char* topic, byte* payload, unsigned int length) {
+void mqtt_callback(char* topic, byte* payload, unsigned int length)
+{
     payload[length] = 0;
     String message = (char*)payload;
 
@@ -200,7 +209,8 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length) {
 
 // WiFi and MQTT setup functions
 
-void setup_wifi() {
+void setup_wifi()
+{
     WiFiSettings.hostname = Sprintf("ClimateNode-%06" PRIx32, ESP.getChipId());
 
     mqtt_host = WiFiSettings.string("mqtt-host",      d_mqtt_host,           F("MQTT server host"));

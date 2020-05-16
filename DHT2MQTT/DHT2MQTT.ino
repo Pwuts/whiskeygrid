@@ -51,7 +51,8 @@ PubSubClient mqttClient(espClient);
 char mqtt_message[80];
 
 
-void setup() {
+void setup()
+{
     Serial.begin(115200);
 
     pinMode(LED_BUILTIN, OUTPUT);
@@ -69,8 +70,11 @@ void setup() {
     sensor.begin();     // initialize DHT22
 }
 
-void loop() {
+void loop()
+{
     static bool first_measurement = true;
+    static unsigned long last_measurement_time = 0;
+
     ArduinoOTA.handle();
 
     if (!mqttClient.connected()) {
@@ -82,7 +86,9 @@ void loop() {
         WiFiSettings.portal();
     }
 
-    if (!(millis() % interval) || first_measurement == true){
+    if ((millis() > last_measurement_time + interval) || first_measurement) {
+        last_measurement_time = millis();
+
         digitalWrite(LED_BUILTIN, LOW);
 
         /* Reading temperature for humidity takes about 250 milliseconds!
@@ -102,7 +108,8 @@ void loop() {
 }
 
 
-void get_measurement() {
+void get_measurement()
+{
     // Reading temperature for humidity takes about 250 milliseconds!
     // Sensor readings may also be up to 2 seconds 'old' (it's a very slow sensor)
     temp_c = sensor.readTemperature() + temp_offset;  // Read temperature as Celcius
@@ -134,7 +141,8 @@ void influx_publish(const String measurement, const String fields, const String 
     mqtt_publish(influx_topic, influx_line.c_str(), false);
 }
 
-void mqtt_callback(char* topic, byte* payload, unsigned int length) {
+void mqtt_callback(char* topic, byte* payload, unsigned int length)
+{
     payload[length] = 0;
     String message = (char*)payload;
 
@@ -154,7 +162,8 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length) {
 
 // WiFi and MQTT setup functions
 
-void setup_wifi() {
+void setup_wifi()
+{
     WiFiSettings.hostname = Sprintf("ClimateNode-%06" PRIx32, ESP.getChipId());
 
     mqtt_host = WiFiSettings.string("mqtt-host",      d_mqtt_host,           F("MQTT server host"));
