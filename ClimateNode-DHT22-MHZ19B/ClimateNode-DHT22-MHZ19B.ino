@@ -99,7 +99,7 @@ void loop()
     }
     mqttClient.loop();
 
-    if (digitalRead(D8) == HIGH) {
+    if (digitalRead(PORTAL_TRIGGER_PIN) == HIGH) {
         WiFiSettings.portal();
     }
 
