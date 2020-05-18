@@ -1,7 +1,7 @@
 #include <WiFiSettings.h>
 #include <LittleFS.h>
 #include <ArduinoOTA.h>
-#include <PubSubClient.h>
+#include <MQTT.h>
 #include <Wire.h>
 #include <SPI.h>
 #include <DHT.h>
@@ -9,6 +9,11 @@
 #include <SoftwareSerial.h>
 
 #define Sprintf(f, ...) ({ char* s; asprintf(&s, f, __VA_ARGS__); String r = s; free(s); r; })
+
+/* These forward declarations are not added by the Arduino preprocessor because they have default
+ * arguments (retain and qos). See https://github.com/arduino/arduino-preprocessor/issues/12 */
+bool mqtt_publish(const String &topic_path, const String &message, bool retain = true, int qos = 0);
+
 
 /* Device specific configuration */
 
@@ -25,7 +30,6 @@ MHZ19 mhz19;
 /* Default configuration */
 
 const char* d_mqtt_host = "127.0.0.1";
-const int   d_mqtt_port = 1883;
 const char* d_mqtt_root = "my_mqtt_root";
 const char* d_connect_topic = "/debug/node_connect";
 const char* d_debug_topic = "/debug";
@@ -34,7 +38,6 @@ const char* d_influx_topic = "/influx";
 /* Configuration variables (are set by the WiFiSettings portal) */
 
 String mqtt_host;
-int mqtt_port;
 String mqtt_root;
 String node_name;
 String temperature_topic;
@@ -58,7 +61,7 @@ float mhz19_temp;
 DHT dht22(DHT_PIN, DHT_TYPE);
 
 WiFiClient espClient;
-PubSubClient mqttClient(espClient);
+MQTTClient mqttClient;
 
 
 void setup()
@@ -74,8 +77,9 @@ void setup()
     setup_wifi();
     setup_ota();
 
-    mqttClient.setServer(mqtt_host.c_str(), mqtt_port);
-    // mqttClient.setCallback(mqtt_callback);
+    mqttClient.begin(mqtt_host.c_str(), espClient);
+    // mqttClient.onMessage(mqtt_callback);
+    connect_mqtt();
 
     // initialize temperature/humidity sensor
     dht22.begin();
@@ -92,11 +96,11 @@ void loop()
     static unsigned long last_dht22_measurement_time = 0, last_mhz19_measurement_time = 0;
 
     ArduinoOTA.handle();
+    mqttClient.loop();
 
     if (!mqttClient.connected()) {
         connect_mqtt();
     }
-    mqttClient.loop();
 
     if (digitalRead(PORTAL_TRIGGER_PIN) == HIGH) {
         WiFiSettings.portal();
@@ -111,10 +115,10 @@ void loop()
          * Sensor readings may also be up to 2 seconds 'old' (it's a very slow sensor) */
         dht22_get_measurement();
 
-        mqtt_publish(temperature_topic, Sprintf("%.1f °C", dht_temp).c_str(), true);
-        mqtt_publish(RH_topic, Sprintf("%.1f %%RH", humidity).c_str(), true);
+        mqtt_publish(temperature_topic, Sprintf("%.1f °C", dht_temp));
+        mqtt_publish(RH_topic,          Sprintf("%.1f %%RH", humidity));
         influx_publish(influx_temperature_measurement, Sprintf("temperature=%.1f", dht_temp), "sensor=\"DHT22\"");
-        influx_publish(influx_humidity_measurement, Sprintf("RH=%.1f", humidity), "sensor=\"DHT22\"");
+        influx_publish(influx_humidity_measurement,    Sprintf("RH=%.1f", humidity), "sensor=\"DHT22\"");
 
         Serial.println();
         digitalWrite(LED_BUILTIN, HIGH);
@@ -128,9 +132,9 @@ void loop()
         /* Get latest temperature and CO2 readings from MH-Z19 sensor */
         mhz19_get_measurement();
 
-        mqtt_publish(co2_topic, Sprintf("%d ppm", co2_ppm).c_str(), true);
-        // mqtt_publish(temperature_topic, Sprintf("%.1f °C"), true);
-        influx_publish(influx_co2_measurement, Sprintf("co2=%d", co2_ppm), "sensor=\"MH-Z19\"");
+        mqtt_publish(co2_topic, Sprintf("%d ppm", co2_ppm));
+        // mqtt_publish(temperature_topic, Sprintf("%.1f °C"));
+        influx_publish(influx_co2_measurement,         Sprintf("co2=%d",           co2_ppm), "sensor=\"MH-Z19\"");
         influx_publish(influx_temperature_measurement, Sprintf("temperature=%.1f", mhz19_temp), "sensor=\"MH-Z19\"");
 
         Serial.println();
@@ -167,41 +171,39 @@ void mhz19_get_measurement() {
 
     mhz19_temp = mhz19.getTemperature(true);
 
-    Serial.printf("MH-Z19: %d ppm (attempt %d)\r\n", co2_ppm, i);
+    Serial.printf("MH-Z19: %d ppm\r\n", co2_ppm);
     Serial.printf("MH-Z19: %.1f°C\r\n", mhz19_temp);
 }
 
 
-bool mqtt_publish(const String topic_path, const char* message, bool retain)
+bool mqtt_publish(const String &topic_path, const String &message, bool retain, int qos)
 {
-    char topic[80]; strcpy(topic, (mqtt_root + topic_path).c_str());
+    String topic = mqtt_root + topic_path;
 
-    Serial.printf("publishing to %s: %s\r\n", topic, message);
-    return mqttClient.publish(topic, message, retain);
+    Serial.printf("publishing to %s: %s\r\n", topic.c_str(), message.c_str());
+    return mqttClient.publish(topic, message, retain, qos);
 }
 
 
-void influx_publish(const String measurement, const String fields, const String tags)
+void influx_publish(const String &measurement, const String &fields, const String &tags)
 {
     String influx_line = Sprintf("%s,node=\"%s\"%s%s ", measurement.c_str(), node_name.c_str(), tags.length() ? "," : "", tags.c_str()) + fields;
-    mqtt_publish(influx_topic, influx_line.c_str(), false);
+    mqtt_publish(influx_topic, influx_line, false, 1);
 }
 
-void mqtt_callback(char* topic, byte* payload, unsigned int length)
-{
-    payload[length] = 0;
-    String message = (char*)payload;
 
-    Serial.printf("Message arrived on topic: [%s], %s\r\n", topic, message.c_str());
+void mqtt_callback(const String &topic, const String &payload)
+{
+    Serial.printf("Message arrived on topic: [%s], %s\r\n", topic.c_str(), payload.c_str());
 
     // if(message == node_name + ", temperature, c"){
     //     dht22_get_measurement();
 
-    //     mqtt_publish(temperature_topic, Sprintf("%.1f °C", dht_temp).c_str(), true);
+    //     mqtt_publish(temperature_topic, Sprintf("%.1f °C", dht_temp));
     // } else if (message == node_name + ", humidity"){
     //     dht22_get_measurement();
 
-    //     mqtt_publish(RH_topic, Sprintf("%.1f %%RH", humidity).c_str(), true);
+    //     mqtt_publish(RH_topic, Sprintf("%.1f %%RH", humidity));
     // }
 }
 
@@ -213,7 +215,6 @@ void setup_wifi()
     WiFiSettings.hostname = Sprintf("ClimateNode-%06" PRIx32, ESP.getChipId());
 
     mqtt_host = WiFiSettings.string("mqtt-host",      d_mqtt_host,           F("MQTT server host"));
-    mqtt_port = WiFiSettings.integer("mqtt-port",     d_mqtt_port,           F("MQTT server port"));
     mqtt_root = WiFiSettings.string("mqtt-root",      d_mqtt_root,           F("MQTT topic root"));
     node_name = WiFiSettings.string("mqtt-node-name", WiFiSettings.hostname, F("MQTT node name (restart first after changing!)"));
     connect_topic = d_connect_topic;
@@ -265,24 +266,24 @@ void setup_ota()
     ArduinoOTA.begin();
 }
 
+
 void connect_mqtt()
 {
     unsigned long connection_lose_time = millis();
 
-    while (!mqttClient.connected()) {   // Loop until connected
-        Serial.print(F("Attempting MQTT connection..."));
+    Serial.print(F("Attempting MQTT connection..."));
+    while (!mqttClient.connect(node_name.c_str())) {   // Loop until connected
+        Serial.print('.');
+        delay(500);
 
-        if (mqttClient.connect(WiFiSettings.hostname.c_str())) { // Attempt to connect
-            Serial.println(F("connected"));
-
-            // Post connect message to MQTT topic once connected
-            mqtt_publish(connect_topic, Sprintf("%s (re)connected after %.1fs", node_name.c_str(), (millis() - connection_lose_time) / 1000.0).c_str(), false);
-
-            Serial.println();
-        } else {
-            Serial.printf("failed, rc=%d; try again in 5 seconds\r\n", mqttClient.state());
-            delay(5000);  // Wait 5 seconds before retrying
-        }
+        // start portal after 30 seconds without connectivity
+        if (millis() - connection_lose_time > 30e3) WiFiSettings.portal();
     }
-}
 
+    Serial.println(F("connected"));
+
+    // Post connect message to MQTT topic once connected
+    mqtt_publish(connect_topic, Sprintf("%s (re)connected after %.1fs", node_name.c_str(), (millis() - connection_lose_time) / 1000.0), false);
+
+    Serial.println();
+}
