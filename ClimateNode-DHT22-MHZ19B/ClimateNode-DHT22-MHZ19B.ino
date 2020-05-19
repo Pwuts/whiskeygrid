@@ -17,6 +17,7 @@ bool mqtt_publish(const String &topic_path, const String &message, bool retain =
 
 /* Device specific configuration */
 
+#define CALIBRATE_TRIGGER_PIN D6
 #define PORTAL_TRIGGER_PIN D8
 
 #define DHT_PIN D4
@@ -24,8 +25,7 @@ bool mqtt_publish(const String &topic_path, const String &message, bool retain =
 
 #define MHZ19_TX_PIN D1
 #define MHZ19_RX_PIN D2
-SoftwareSerial mhzSerial(MHZ19_RX_PIN, MHZ19_TX_PIN);
-MHZ19 mhz19;
+#define MHZ19_WARMUP_PERIOD 30e3
 
 /* Default configuration */
 
@@ -59,6 +59,8 @@ int co2_ppm;
 float mhz19_temp;
 
 DHT dht22(DHT_PIN, DHT_TYPE);
+SoftwareSerial mhzSerial(MHZ19_RX_PIN, MHZ19_TX_PIN);
+MHZ19 mhz19;
 
 WiFiClient espClient;
 MQTTClient mqttClient;
@@ -71,6 +73,7 @@ void setup()
     pinMode(LED_BUILTIN, OUTPUT);
     digitalWrite(LED_BUILTIN, HIGH);
 
+    pinMode(CALIBRATE_TRIGGER_PIN, INPUT_PULLUP);
     pinMode(PORTAL_TRIGGER_PIN, INPUT);
 
     LittleFS.begin();
@@ -87,7 +90,9 @@ void setup()
     // initialize CO2 sensor
     mhzSerial.begin(9600);
     mhz19.begin(mhzSerial);
-    mhz19.autoCalibration();
+    mhz19.setRange();
+    mhz19.setSpan();
+    mhz19.autoCalibration(false);
 }
 
 void loop()
@@ -102,11 +107,17 @@ void loop()
         connect_mqtt();
     }
 
+    if (digitalRead(CALIBRATE_TRIGGER_PIN) == LOW) {
+        Serial.println("Calibrating CO2 sensor...");
+        mhz19.calibrateZero();
+        delay(500);
+    }
     if (digitalRead(PORTAL_TRIGGER_PIN) == HIGH) {
+        Serial.println("Starting portal...");
         WiFiSettings.portal();
     }
 
-    if ((millis() > last_dht22_measurement_time + dht22_interval) || first_measurement) {
+    if (millis() > last_dht22_measurement_time + dht22_interval || first_measurement) {
         last_dht22_measurement_time = millis();
 
         digitalWrite(LED_BUILTIN, LOW);
@@ -124,7 +135,7 @@ void loop()
         digitalWrite(LED_BUILTIN, HIGH);
     }
 
-    if ((millis() > last_mhz19_measurement_time + mhz19_interval) || first_measurement) {
+    if (millis() > last_mhz19_measurement_time + mhz19_interval && millis() > MHZ19_WARMUP_PERIOD) {
         last_mhz19_measurement_time = millis();
 
         digitalWrite(LED_BUILTIN, LOW);
